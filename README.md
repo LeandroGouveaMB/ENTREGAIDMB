@@ -6,10 +6,10 @@
   <style>
     body { 
       font-family: Arial, sans-serif; 
-      background-color: #ffffff; /* Alterado para branco */
+      background-color: #ffffff;
       padding: 20px; 
-      padding-top: 120px; /* Espaço para a form-section fixa */
-      margin: 0; /* Remove margens padrão */
+      padding-top: 120px;
+      margin: 0;
     }
     .form-section {
       display: flex; 
@@ -17,14 +17,14 @@
       gap: 10px;
       margin-bottom: 20px; 
       flex-wrap: wrap;
-      position: fixed; /* Fixa no topo */
+      position: fixed;
       top: 0; 
       left: 0; 
-      width: 100%; /* Ocupa toda a largura */
-      background-color: #ffffff; /* Alterado para branco */
+      width: 100%;
+      background-color: #ffffff;
       padding: 20px; 
-      box-sizing: border-box; /* Inclui padding na largura */
-      z-index: 1000; /* Garante que fique acima de outros elementos */
+      box-sizing: border-box;
+      z-index: 1000;
     }
     .form-section input[type="text"] {
       padding: 8px; 
@@ -70,14 +70,21 @@
 <body>
 
   <div class="form-section">
-    <label for="nip">NIP ou Registro do Titular</label>
-    <input type="text" id="nip" placeholder="Digite o NIP..." onkeydown="if(event.key === 'Enter') salvarRegistro()">
-    <button class="btn btn-salvar" onclick="salvarRegistro()">Salvar Registro ✅</button>
-    <button class="btn btn-assinar" onclick="abrirSeletorEPrograma()">Gravar Assinatura 🖊</button>
-    <button class="btn btn-salvar" onclick="salvarEPular()">Salvar</button>
-    <button class="btn btn-impossibilitado" onclick="marcarImpossibilitado()">Impossibilitado de Assinar</button>
-    <button class="btn btn-recibo" onclick="gerarRecibo()">GERAR RECIBO</button>
-    <button class="btn btn-autorizacao" onclick="marcarAutorizacao()">Trouxe Autorização</button>
+    <form name="entrega-identidades" data-netlify="true" id="formulario" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="form-name" value="entrega-identidades">
+      <label for="nip">NIP ou Registro do Titular</label>
+      <input type="text" id="nip" name="nip" placeholder="Digite o NIP..." onkeydown="if(event.key === 'Enter') salvarRegistro()">
+      <button type="button" class="btn btn-salvar" onclick="salvarRegistro()">Salvar Registro ✅</button>
+      <button type="button" class="btn btn-assinar" onclick="abrirSeletorEPrograma()">Gravar Assinatura 🖊</button>
+      <button type="button" class="btn btn-salvar" onclick="salvarEPular()">Salvar</button>
+      <button type="button" class="btn btn-impossibilitado" onclick="marcarImpossibilitado()">Impossibilitado de Assinar</button>
+      <button type="button" class="btn btn-recibo" onclick="gerarRecibo()">GERAR RECIBO</button>
+      <button type="button" class="btn btn-autorizacao" onclick="marcarAutorizacao()">Trouxe Autorização</button>
+      <!-- Campos ocultos para enviar data/hora, recebido por e autorização -->
+      <input type="hidden" id="dataHora" name="dataHora">
+      <input type="hidden" id="recebidoPor" name="recebidoPor">
+      <input type="hidden" id="autorizacao" name="autorizacao">
+    </form>
   </div>
 
   <table id="tabela">
@@ -92,12 +99,31 @@
     <tbody></tbody>
   </table>
 
-  <input type="file" id="fileInput" accept="image/*" style="display: none" onchange="inserirImagem(this)">
+  <input type="file" id="fileInput" name="imagem" accept="image/*" style="display: none" onchange="inserirImagem(this)">
 
   <script>
     let linhaAtual = null;
 
-    function salvarRegistro() {
+    // Manipulador de envio do formulário
+    const form = document.getElementById("formulario");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); // Impede o comportamento padrão (abrir nova aba)
+      const formData = new FormData(form);
+
+      try {
+        const response = await fetch("/", {
+          method: "POST",
+          body: formData
+        });
+        console.log("Dados enviados ao Netlify!");
+        alert("Ação registrada com sucesso!");
+      } catch (error) {
+        console.error("Erro ao enviar dados:", error);
+        alert("Erro ao registrar. Verifique o console.");
+      }
+    });
+
+    async function salvarRegistro() {
       const nipInput = document.getElementById("nip");
       const nip = nipInput.value.trim();
       if (!nip) {
@@ -109,10 +135,9 @@
       const novaLinha = tabela.insertRow();
       const dataHora = new Date().toLocaleString("pt-BR");
 
-      // Criar célula do NIP com um ID único para facilitar o rolagem
       const nipCell = novaLinha.insertCell(0);
       nipCell.textContent = nip;
-      nipCell.id = `nip-${nip}-${Date.now()}`; // ID único usando NIP e timestamp
+      nipCell.id = `nip-${nip}-${Date.now()}`;
 
       novaLinha.insertCell(1).textContent = dataHora;
       novaLinha.insertCell(2).innerHTML = "";
@@ -120,9 +145,14 @@
 
       linhaAtual = novaLinha;
 
-      // Rolar até a nova linha
-      nipCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Preencher campos ocultos e disparar evento de submit
+      document.getElementById("nip").value = nip;
+      document.getElementById("dataHora").value = dataHora;
+      document.getElementById("recebidoPor").value = "";
+      document.getElementById("autorizacao").value = "";
+      form.dispatchEvent(new Event("submit"));
 
+      nipCell.scrollIntoView({ behavior: "smooth", block: "center" });
       nipInput.value = "";
       nipInput.focus();
     }
@@ -132,36 +162,45 @@
         alert("Salve o registro antes de capturar a assinatura.");
         return;
       }
-
       document.getElementById("fileInput").click();
-
-      fetch("/executar_simplesign")
-        .then(response => {
-          if (!response.ok) {
-            console.error("Erro ao executar o programa");
-          }
-        })
-        .catch(err => {
-          console.error("Erro de conexão ao tentar executar o programa:", err);
-        });
     }
 
-    function inserirImagem(input) {
+    async function inserirImagem(input) {
       const arquivo = input.files[0];
       if (!arquivo || !linhaAtual) return;
 
       const leitor = new FileReader();
-      leitor.onload = function(e) {
+      leitor.onload = async function(e) {
         const img = document.createElement("img");
         img.src = e.target.result;
         img.style.maxHeight = "50px";
         linhaAtual.cells[2].innerHTML = "";
         linhaAtual.cells[2].appendChild(img);
+
+        // Preencher campos ocultos e disparar evento de submit
+        document.getElementById("nip").value = linhaAtual.cells[0].textContent;
+        document.getElementById("dataHora").value = linhaAtual.cells[1].textContent;
+        document.getElementById("recebidoPor").value = "Imagem enviada";
+        document.getElementById("autorizacao").value = linhaAtual.cells[3].textContent;
+        const formData = new FormData(form);
+        formData.append("imagem", arquivo);
+
+        try {
+          await fetch("/", {
+            method: "POST",
+            body: formData
+          });
+          console.log("Imagem enviada ao Netlify!");
+          alert("Imagem registrada com sucesso!");
+        } catch (error) {
+          console.error("Erro ao enviar imagem:", error);
+          alert("Erro ao registrar imagem. Verifique o console.");
+        }
       };
       leitor.readAsDataURL(arquivo);
     }
 
-    function marcarImpossibilitado() {
+    async function marcarImpossibilitado() {
       const tabela = document.getElementById("tabela").getElementsByTagName("tbody")[0];
       if (tabela.rows.length === 0) {
         alert("Nenhum registro para marcar.");
@@ -170,15 +209,29 @@
 
       const ultimaLinha = tabela.rows[tabela.rows.length - 1];
       ultimaLinha.cells[2].textContent = "Impossibilitado de Assinar";
+
+      // Preencher campos ocultos e disparar evento de submit
+      document.getElementById("nip").value = ultimaLinha.cells[0].textContent;
+      document.getElementById("dataHora").value = ultimaLinha.cells[1].textContent;
+      document.getElementById("recebidoPor").value = "Impossibilitado de Assinar";
+      document.getElementById("autorizacao").value = ultimaLinha.cells[3].textContent;
+      form.dispatchEvent(new Event("submit"));
     }
 
-    function marcarAutorizacao() {
+    async function marcarAutorizacao() {
       if (!linhaAtual) {
         alert("Salve o registro antes de marcar a autorização.");
         return;
       }
 
       linhaAtual.cells[3].textContent = "Trouxe Autorização";
+
+      // Preencher campos ocultos e disparar evento de submit
+      document.getElementById("nip").value = linhaAtual.cells[0].textContent;
+      document.getElementById("dataHora").value = linhaAtual.cells[1].textContent;
+      document.getElementById("recebidoPor").value = linhaAtual.cells[2].textContent || (linhaAtual.cells[2].innerHTML.includes("img") ? "Imagem enviada" : "");
+      document.getElementById("autorizacao").value = "Trouxe Autorização";
+      form.dispatchEvent(new Event("submit"));
     }
 
     function gerarRecibo() {
@@ -192,10 +245,9 @@
           const assinaturaCell = linha.cells[2];
           const assinatura = assinaturaCell.innerHTML || "Impossibilitado de Assinar";
 
-          // Captura a data atual no formato dd/mm/aaaa
           const hoje = new Date();
           const dia = String(hoje.getDate()).padStart(2, '0');
-          const mes = String(hoje.getMonth() + 1).padStart(2, '0'); // Mês começa em 0, então soma 1
+          const mes = String(hoje.getMonth() + 1).padStart(2, '0');
           const ano = hoje.getFullYear();
           const dataAtual = `${dia}/${mes}/${ano}`;
 
@@ -220,22 +272,20 @@
                   .field { 
                     display: flex; 
                     align-items: center; 
-                    margin-bottom: 16px; /* Uma linha de espaço entre os campos */
+                    margin-bottom: 16px;
                   }
                   .field label { 
                     font-weight: bold; 
                     width: 100px; 
-                    line-height: 1; /* Garante que o texto do label não tenha altura extra */
+                    line-height: 1;
                   }
                   .field span { 
                     border-bottom: 1px solid #000; 
                     flex-grow: 1; 
-                    padding: 0; /* Remove padding que pode causar desalinhamento */
-                    line-height: 1; /* Alinha a linha com o texto */
-                    padding-bottom: 4px; /* Abaixa o sublinhado */
+                    padding-bottom: 4px;
                   }
                   .field .no-underline { 
-                    border-bottom: none; /* Remove o sublinhado para o campo Data */
+                    border-bottom: none;
                   }
                   .signature-section { 
                     text-align: center; 
@@ -266,7 +316,7 @@
                   .local { 
                     text-align: center; 
                     font-size: 10px; 
-                    margin-bottom: 16px; /* Uma linha de espaço antes de Data: */
+                    margin-bottom: 16px;
                   }
                 </style>
               </head>
@@ -286,7 +336,7 @@
                 </div>
                 <div class="field">
                   <label>NIP:</label>
-                  <span></span>
+                  <span>${nip}</span>
                 </div>
                 <div class="field">
                   <label>Nome Completo:</label>
@@ -335,40 +385,19 @@
     }
 
     function salvarEPular() {
-      const htmlContent = document.documentElement.outerHTML; // Captura o HTML da página atual
-
-      // Cria um Blob com o conteúdo HTML
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-
-      // Cria uma URL temporária para o arquivo
-      const url = URL.createObjectURL(blob);
-
-      // Cria um link para simular o download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'pagina_do_nip.html'; // Define o nome do arquivo a ser baixado
-
-      // Aciona o clique do link para iniciar o download
-      a.click();
-
-      // Libera a URL temporária
-      URL.revokeObjectURL(url);
-
-      // Redirecionar para o NIP recém-inserido
-      const nipElemento = document.querySelector('#nip-' + getUltimoNIPInserido());
-
-      if (nipElemento) {
-        // Desloca até o NIP inserido
-        nipElemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const nip = getUltimoNIPInserido();
+      if (nip) {
+        const nipElemento = document.querySelector(`[id^="nip-${nip}-"]`);
+        if (nipElemento) {
+          nipElemento.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }
     }
 
-    // Função para pegar o último NIP inserido (substitua com lógica adequada)
     function getUltimoNIPInserido() {
-      // Aqui, deve ser a lógica que você usa para identificar o último NIP inserido.
-      // Pode ser, por exemplo, pegar o valor do último NIP da planilha.
-      // Por enquanto, vamos apenas retornar um número de exemplo.
-      return '123456789'; // Exemplo de NIP. Troque isso conforme sua lógica de inserção
+      const tabela = document.getElementById("tabela").getElementsByTagName("tbody")[0];
+      if (tabela.rows.length === 0) return null;
+      return tabela.rows[tabela.rows.length - 1].cells[0].textContent;
     }
   </script>
 
